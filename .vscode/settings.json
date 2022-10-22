@@ -27,5 +27,16 @@
     "**/.*/**",
     "**/.vscode",
     "**/.vscode/**"
-  ]
+  ],
+  "cSpell.words": [
+    "Implicant",
+    "minterm",
+    "minterms"
+  ],
+  "files.associations": {
+    "iostream": "cpp",
+    "*.tcc": "cpp",
+    "fstream": "cpp",
+    "random": "cpp"
+  }
 }
