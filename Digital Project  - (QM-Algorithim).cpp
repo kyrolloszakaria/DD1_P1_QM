@@ -3,13 +3,15 @@
 #include <fstream>
 #include <vector>
 #include <map>
+#include <queue>
 #include <string>
 #include <stdlib.h>
 using namespace std;
 
 
 
-struct Implicant {
+struct Implicant 
+{
     vector<int> minterms; // minterms covered by this PI
     int MinNum; // decimal
     int dashes;
@@ -28,12 +30,6 @@ struct Implicant {
         this->dashes = d;
         this->used = false;
     }
-    //Implicant(int n, int d, bool used) 
-    //{
-    //    this->number = n;
-    //    this->dashes = d;
-    //    this->used = used;
-    //}
 };
 map<int,bool> MintermsCovered; // minterms covered or not by EPIS
 int VarNum; //minimum bits to print
@@ -47,30 +43,25 @@ vector < vector < Implicant > > Column2; //mid process table
 vector < vector < Implicant > > Column3; //final table
 vector < Implicant > printed_implicants; //avoid printing the same final numbers
 //----------------------------------------------------------
-int count_1s(int number); //count the number of 1s in a number
-void print_binary(int number); //print the number in binary
+int count_1s(int number); //count the number of 1s in a number to deteremine its group
+void print_binary(int number); //convert decimal to binary then print it
 void create_Col_I(); //create original table sorted by the number of 1s
 void print_CoL_I(); //print the table
-Implicant init_B_number(int n, int d, bool u); //initialize a B_number
 void create_Col_II(); //create mid process table
 void print_Col_II(); //print it
 string print_PI_binary_dashes(int n, int d); //print the mid table (with -'s)
 void create_Col_III(); //create final table
 void print_Col_III(); //print final table with -'s and unused terms
 bool is_printed(Implicant n); //dont print terms that were already printed
-void init(); //start the table making and printing
-void getinput(); //get input from user
-int count_bits(int n); //min bits to represent a number 
-void printOccurrencesMap();
+void printOccurrencesMap(); 
 void createOccurrencesMap(vector<int> minterms);
 void printMinsThatAreNotCoveredByEPIs();
 void printEssentialPrimeImplicants();
 void getInputFromFile();
+void printBooleanexpression(string binary); // convert 11-0 to AB~D
 
-void printBooleanexpression(string binary);
-
-int main() {
-
+int main() 
+{
     cout << "\nQuine McCluskey Algorithm - DD1_P1\n";
     getInputFromFile();
     create_Col_I();
@@ -85,7 +76,6 @@ int main() {
     printMinsThatAreNotCoveredByEPIs();
     return 0;
 }
-/* counts 1s by getting the LSB (%2) and then shifting until 0 */
 int count_1s(int number) // convert decimal to binary and count number of 1's
 {
     int bit = 0;
@@ -101,8 +91,7 @@ int count_1s(int number) // convert decimal to binary and count number of 1's
     }
     return count;
 }
-/*get LSB, arrange it in array, the print array in reverse order so MSB is on
-the left */
+
 void print_binary(int number)  // simply convert decimal to binary
 {
     int* bits = new int[VarNum];
@@ -117,7 +106,8 @@ void print_binary(int number)  // simply convert decimal to binary
 }
 
 
-void create_Col_I() {
+void create_Col_I() 
+{
     int OnesNum; // Group Number (number of 1's)
     for (int i = 0; i < input_values.size(); i++) 
     {
@@ -131,7 +121,8 @@ void create_Col_I() {
     }
 }
 
-void print_CoL_I() {
+void print_CoL_I() 
+{
     cout << endl << "Coulmn_I:" << endl;
     for (int i = 0; i < Column1.size(); i++) {
         cout << "G_" << i; // Group Number
@@ -146,7 +137,8 @@ void print_CoL_I() {
 }
 
 
-void create_Col_II() {
+void create_Col_II() 
+{
     int onesNum; // Group Number (number of 1's)
     int temp_number, temp_dashes; // components of struct
     for (int i = 0; i < Column1.size() - 1; i++) { // for each group
@@ -189,7 +181,8 @@ void print_Col_II()
     }
 }
 
-string print_PI_binary_dashes(int n, int d) { // print binary representation with dashes
+string print_PI_binary_dashes(int n, int d) // print binary representation with dashes
+{ 
     int* bits = new int[VarNum];
     string boolExp;
     int count = 0;
@@ -217,12 +210,12 @@ string print_PI_binary_dashes(int n, int d) { // print binary representation wit
         }
            
     }
-    cout << "\n";
     boolExp += "+";
     return boolExp;
 }
 
-void create_Col_III() {
+void create_Col_III() 
+{
     int onesNum;
     int temp_number, temp_dashes;
     for (int i = 0; i < Column2.size() - 1; i++) {
@@ -278,7 +271,7 @@ void printOccurrencesMap()
 }
 void printEssentialPrimeImplicants() 
 {
-    string BoolExp; //ABCD
+    string BoolExp = ""; //ABCD
 
 
    // <minterm , occurs ,<PIs>> Occurences
@@ -286,6 +279,7 @@ void printEssentialPrimeImplicants()
    
    //  <minterm, isCovered>
    // map<int, bool> MintermsCovered;
+    printed_implicants.clear();
     cout << "Essential Prime Implicants are: ";
     for (auto it = Occurrences.begin(); it != Occurrences.end(); it++)
     {                                                     
@@ -296,7 +290,9 @@ void printEssentialPrimeImplicants()
             {
                 MintermsCovered[it->second.second.front().minterms[i]] = true;
             }
+            if(!is_printed(it->second.second.front()))
             BoolExp += print_PI_binary_dashes(it->second.second.front().MinNum, it->second.second.front().dashes);
+            printed_implicants.push_back(it->second.second.front());
             cout << " ";
         }
     }
@@ -312,6 +308,7 @@ void printMinsThatAreNotCoveredByEPIs()
     {
         if (!it->second)
         {
+            // we have the uncovered minterms
             flag = false;
             cout << it->first;
             cout << "  ";
@@ -551,15 +548,16 @@ int count_bits(int n) {
 
 void printBooleanexpression(string binary) 
 {
+    string ans = "";
     cout << "Boolean Expression for the EPIs: ";
     int letter = 65; // A
     for (int i =0; i < binary.length()-1; i++)
     {
-        if (binary[i] == '+') letter = 65;
-        if (binary[i] == '0') cout << '~'<< char(letter);
-        if (binary[i] == '1') cout << char(letter);
-        if (binary[i] == '2') letter++;
+        if (binary[i] == '+') { letter = 64; ans += " + "; }
+        if (binary[i] == '0') ans = ans + '~' + char(letter);
+        if (binary[i] == '1') ans += char(letter);
         letter++;  
     }
+    cout << ans;
     cout << "\n";
 }

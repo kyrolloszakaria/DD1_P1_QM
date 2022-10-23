@@ -1,395 +1,563 @@
 #include <iostream>
+#include <algorithm>
+#include <fstream>
 #include <vector>
-#include <set>
 #include <map>
+#include <queue>
+#include <string>
+#include <stdlib.h>
 using namespace std;
 
-// Only For Developer: Donot Uncomment for regural use
-// #define SuhaanTesting
 
-struct GroupElement 
+
+struct Implicant 
 {
-	vector<int> minterms;
-	vector<int> value; // binary representation
+    vector<int> minterms; // minterms covered by this PI
+    int MinNum; // decimal
+    int dashes;
+    bool used;// paired or not
+    Implicant(int n) // when creating the Column_I while taking the input
+    {
+        this->MinNum = n;
+        this->minterms.push_back(n);
+        this->dashes = 0;
+        this->used = false;
+
+    }
+    Implicant(int n, int d) 
+    {
+        this->MinNum = n;
+        this->dashes = d;
+        this->used = false;
+    }
 };
+map<int,bool> MintermsCovered; // minterms covered or not by EPIS
+int VarNum; //minimum bits to print
+vector <int> input_values; // minterms + don't cares
+vector<int> mintermsOnly;
+vector<int> dCareOnly;
+// <minterm, (occurences (number of PIs covering thos minterm),PIs)>
+map<int, pair<int,vector<Implicant>>> Occurrences; // Number of PIs for each minterm
+vector < vector < Implicant > > Column1; //original table
+vector < vector < Implicant > > Column2; //mid process table
+vector < vector < Implicant > > Column3; //final table
+vector < Implicant > printed_implicants; //avoid printing the same final numbers
+//----------------------------------------------------------
+int count_1s(int number); //count the number of 1s in a number to deteremine its group
+void print_binary(int number); //convert decimal to binary then print it
+void create_Col_I(); //create original table sorted by the number of 1s
+void print_CoL_I(); //print the table
+void create_Col_II(); //create mid process table
+void print_Col_II(); //print it
+string print_PI_binary_dashes(int n, int d); //print the mid table (with -'s)
+void create_Col_III(); //create final table
+void print_Col_III(); //print final table with -'s and unused terms
+bool is_printed(Implicant n); //dont print terms that were already printed
+void printOccurrencesMap(); 
+void createOccurrencesMap(vector<int> minterms);
+void printMinsThatAreNotCoveredByEPIs();
+void printEssentialPrimeImplicants();
+void getInputFromFile();
+void printBooleanexpression(string binary); // convert 11-0 to AB~D
 
-pair<vector<int>, int> getMintermAndCount(const int minTerm, const int literalCount);
-map<int, vector<GroupElement>> mergeGroupElement(map<int, vector<GroupElement>> numberedGroups, int literals, vector<GroupElement> &notUpdated);
-void displayFormatedAnswer(set<vector<int>> answer);
-
-// All Print Functions
-void printMinterm(const vector<int> v);
-void printState(const vector<int> v);
-void printMintermWithDontCare(const vector<int> v, const set<int> dontCareSet);
-void printGroups(const map<int, vector<GroupElement>> allGroups, const set<int>dontCareSet);
-void printNotUpdated(vector<GroupElement> notUpdated);
-
-int main() {
-#ifdef SuhaanTesting
-	freopen("input.txt", "r", stdin);
-	freopen("output.txt", "w", stdout);
-#endif
-
-	// Header
-	cout << "\nQuine McCluskey Minimization Technique\n";
-
-	// SetUp
-	cout << "\n--------------------------------------------------\n";
-
-	int literalCount;
-	cout << "Enter the number of Literals(greather than Zero): ";
-	cin >> literalCount;
-
-	int minTermsCount;
-	cout << "Number of Minterms: ";
-	cin >> minTermsCount;
-	set<int> minTermsSet;
-	cout << "Enter Minterms with space betweeen(eg. 1 2 3): " << endl;
-	for (int i = 0; i < minTermsCount; ++i)
-	{
-		int minterm;
-		cin >> minterm;
-		minTermsSet.insert(minterm);
-	}
-
-	int dontCareTermsCount;
-	cout << "Number of DontCares: ";
-	cin >> dontCareTermsCount;
-	set<int> dontCareTermsSet;
-	cout << "Enter Dont Care Terms with space betweeen(eg. 1 2 3): " << endl;
-	for (int i = 0; i < dontCareTermsCount; ++i)
-	{
-		int dontCareTerm;
-		cin >> dontCareTerm;
-		dontCareTermsSet.insert(dontCareTerm);
-	}
-
-	cout << "\n--------------------------------------------------\n";
-
-	// Making Groups
-	map<int, vector<GroupElement>> numberedGroups;
-
-	// Adding minterms to the numberedGroups
-	set<int> totalTerms;
-	totalTerms.insert(minTermsSet.begin(), minTermsSet.end());
-	totalTerms.insert(dontCareTermsSet.begin(), dontCareTermsSet.end());
-	for (auto term : totalTerms)
-	{
-		pair<vector<int>, int> result = getMintermAndCount(term, literalCount);
-
-		// Creating a group element
-		GroupElement groupEle;
-		groupEle.minterms.push_back(term);
-		groupEle.value = result.first;
-
-		// Adding group element to the respective group
-		numberedGroups[result.second].push_back(groupEle);
-
-		// Printing the minterm with its value
-		cout << term << ": ";
-		printMinterm(result.first);
-		cout << endl;
-	}
-
-	// Now Printing the All the Groups
-	cout << "\n--------------------------------------------------\n";
-	cout << "Grouped Minterms And DontCares: \n" << endl;
-	printGroups(numberedGroups, dontCareTermsSet);
-
-	// Merging the Groups and printing them
-	// and not updated groups are those which were not considred during merge
-	vector<GroupElement> notUpdated;
-	while (true) {
-		map<int, vector<GroupElement>> newNumberedGroups = mergeGroupElement(numberedGroups, literalCount, notUpdated);
-
-		if (newNumberedGroups.size() == 0 ) break;
-		numberedGroups = newNumberedGroups;
-
-		// Now Printing the All the Groups
-		cout << "\n--------------------------------------------------\n";
-		cout << "Grouped Minterms And DontCares: \n" << endl;
-		printGroups(numberedGroups, dontCareTermsSet);
-	}
-
-	// Printing the terms which were left out
-	cout << "\n--------------------------------------------------\n";
-	cout << "Terms which were left when merging the groups" << endl;
-	printNotUpdated(notUpdated);
-
-	// Step to get the minterm and the table of them
-
-	// going through the table and taking the minterms which appear only once in the table
-	// and adding it to the answer
-	map<int, int> countInTable;
-	set<vector<int>> seenMinterms; // Used for identifying the seen minterms
-
-	for (auto& group : numberedGroups) {
-		for (auto& groupElement : group.second) {
-
-			// Checking if the minterm is seen or not
-			if (seenMinterms.count(groupElement.value)) continue;
-			seenMinterms.insert(groupElement.value);
-
-			// Adding minterms to the table
-			for (auto& minterm : groupElement.minterms) {
-				if (!dontCareTermsSet.count(minterm)) {
-					countInTable[minterm]++;
-				}
-			}
-		}
-	}
-
-	// Adding other prime implicants which were lost during merging
-	for (auto& groupElement : notUpdated) {
-		if (seenMinterms.count(groupElement.value)) continue;
-		seenMinterms.insert(groupElement.value);
-		// printState(groupElement.value);
-		// cout << endl;
-		for (auto& minterm : groupElement.minterms) {
-			if (!dontCareTermsSet.count(minterm)) {
-				countInTable[minterm]++;
-			}
-		}
-	}
-
-	// Now we will extract the answer
-	set<vector<int>> answer;
-
-	// it stroes the individual terms used so tha we can check which terms are remaining
-	set<int> termsTaken;
-	for (auto& cell : countInTable) {
-		if (cell.second == 1)
-		{
-			for (auto& gp : numberedGroups) {
-				for (auto& ele : gp.second) {
-					int count = 0;
-					for (auto& num : ele.minterms) {
-						if (cell.first == num)count++;
-					}
-					if (count != 0) {
-						answer.insert(ele.value);
-						for (auto& num : ele.minterms) {
-							termsTaken.insert(num);
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Printing the table
-	cout << "\n--------------------------------------------------\n";
-	cout << "Terms with the occurnce of them: " << endl;
-	for (auto& i : countInTable) {
-		cout << i.first << ": " << i.second << endl;
-	}
-
-	// Finding the elements left in countable which are not included
-	// The logic suggest that if the term is in the count table then it is in any of the elements
-
-	for (auto& iterator : countInTable) {
-		if (!termsTaken.count(iterator.first))
-		{
-			bool flag = false;
-			// cout << iterator.first << endl;
-			for (auto& gp : numberedGroups) {
-				for (auto& ele : gp.second) {
-					for (auto& j : ele.minterms) {
-						if (iterator.first == j) {
-							answer.insert(ele.value);
-							flag = true;
-							break;
-						}
-					}
-					if (flag) break;
-				}
-				if (flag) break;
-			}
-
-			// Checking if it is present
-			for (auto& j : notUpdated) {
-				for (auto& k : j.minterms) {
-					if (iterator.first == k) {
-						answer.insert(j.value);
-						flag = true;
-						break;
-					}
-				}
-				if (flag) break;
-			}
-		}
-	}
-
-	// This is for the remaining onesfor which is not included
-	for (auto& minterm : minTermsSet) {
-		if (!countInTable.count(minterm)) {
-			answer.insert(getMintermAndCount(minterm, literalCount).first);
-		}
-	}
-
-	// showing the answer
-	cout << "\n--------------------------------------------------\n";
-	cout << "The Minimized Equation is: ";
-	displayFormatedAnswer(answer);
-
-	return 0;
+int main() 
+{
+    cout << "\nQuine McCluskey Algorithm - DD1_P1\n";
+    getInputFromFile();
+    create_Col_I();
+    print_CoL_I();
+    create_Col_II();
+    print_Col_II();
+    create_Col_III();
+    createOccurrencesMap(mintermsOnly); // pass only minterms as vector<int>
+    print_Col_III();
+    printOccurrencesMap();
+    printEssentialPrimeImplicants();
+    printMinsThatAreNotCoveredByEPIs();
+    return 0;
+}
+int count_1s(int number) // convert decimal to binary and count number of 1's
+{
+    int bit = 0;
+    int count = 0;
+    while (number > 0) 
+    {
+        bit = number % 2; 
+        number = number / 2; 
+        if (bit) // if bit is 1
+        {
+            count++;
+        }
+    }
+    return count;
 }
 
-pair<vector<int>, int> getMintermAndCount(const int minTerm, const int literalCount) {
-	vector<int> mintermVector;
-	int onesCount = 0;
-
-	for (int i = 0; i < literalCount; ++i)
-	{
-		if (minTerm & 1 << (literalCount - i - 1)) {
-			mintermVector.push_back(1);
-			onesCount++;
-		}
-		else
-		{
-			mintermVector.push_back(0);
-		}
-	}
-
-	pair<vector<int>, int> mintermAndCount;
-	mintermAndCount.first = mintermVector;
-	mintermAndCount.second = onesCount;
-
-	return mintermAndCount;
+void print_binary(int number)  // simply convert decimal to binary
+{
+    int* bits = new int[VarNum];
+    int count = 0;
+    while (number > 0 || count < VarNum) {
+        bits[count] = number % 2;
+        number /=2;
+        count++;
+    }
+    for (int i = count - 1; i >= 0; i--)
+        cout << bits[i];
 }
 
-// merging function
-map<int, vector<GroupElement>> mergeGroupElement(map<int, vector<GroupElement>> numberedGroups, int literals, vector<GroupElement> &notUpdated) {
-	// Merged groups will be added here
-	map<int, vector<GroupElement>> newNumberedGroups;
-	int updateCount = 0;
 
-	set<vector<int>> termsUsed;
+void create_Col_I() 
+{
+    int OnesNum; // Group Number (number of 1's)
+    for (int i = 0; i < input_values.size(); i++) 
+    {
+        OnesNum = count_1s(input_values[i]);
 
-	for (auto& group : numberedGroups) {
-		if (numberedGroups.count(group.first + 1))
-		{
-			int wholeGroupNotUpdated = 0;
-			for (auto& groupElement : group.second) {
-				// Checking if next group is present or not
-				// Comparing the elements with the next group elements
-				for (auto& nextGroupElement : numberedGroups[group.first + 1]) {
-					int diffIndex = -1;
-					int diffCount = 0;
+        if (OnesNum + 1 > Column1.size())
+            Column1.resize(OnesNum + 1);
 
-					for (int i = 0; i < literals; ++i)
-					{
-						if (groupElement.value[i] != nextGroupElement.value[i]) {
-							diffIndex = i;
-							diffCount++;
-						}
-					}
-
-					if (diffCount == 1) {
-						updateCount++;
-						wholeGroupNotUpdated++;
-
-						GroupElement newGroupElement;
-
-						newGroupElement.value = groupElement.value;
-						newGroupElement.value[diffIndex] = -1;
-
-						// Adding new minters
-
-						newGroupElement.minterms = groupElement.minterms;
-						for (auto& m : nextGroupElement.minterms) {
-							newGroupElement.minterms.push_back(m);
-						}
-
-						termsUsed.insert(groupElement.minterms);
-						termsUsed.insert(nextGroupElement.minterms);
-
-						// Adding new numbered group
-						newNumberedGroups[group.first].push_back(newGroupElement);
-					}
-				}
-			}
-		}
-	}
-
-	if (updateCount == 0) return {};
-
-	for (auto& group : numberedGroups) {
-		for (auto& groupElement : group.second) {
-			if (!termsUsed.count(groupElement.minterms))
-			{
-				notUpdated.push_back(groupElement);
-			}
-		}
-	}
-
-	return newNumberedGroups;
+        Implicant temp_num(input_values[i]); // make PI = number(minterm), dashes => none, used => false, minterms -> this number(minterm)
+        Column1[OnesNum].push_back(temp_num);
+    }
 }
 
-void displayFormatedAnswer(set<vector<int>> answer) {
-	for (auto& i : answer) {
-		char letter = 'A';
-		for (auto& j : i) {
-			if (j != -1) {
-				if (j == 1)
-				{
-					cout << letter;
-				} else {
-					cout << "~" << letter;
-				}
-			}
-			letter++;
-		}
-		cout << " + ";
-	}
-	cout << "\b\b" << "  " << endl;
+void print_CoL_I() 
+{
+    cout << endl << "Coulmn_I:" << endl;
+    for (int i = 0; i < Column1.size(); i++) {
+        cout << "G_" << i; // Group Number
+        for (int j = 0; j < Column1[i].size(); j++) // elements of each group
+        {
+            cout << "\tm" << Column1[i][j].MinNum << "\t";
+            print_binary(Column1[i][j].MinNum);
+            cout << endl;
+        }
+        cout << "\n-------------------------------------" << endl;
+    }
 }
 
-// All Print functions
-void printMinterm(const vector<int> v) {
-	for (int i = 0; i < v.size(); ++i)	{
-		cout << v[i] << " ";
-	}
+
+void create_Col_II() 
+{
+    int onesNum; // Group Number (number of 1's)
+    int temp_number, temp_dashes; // components of struct
+    for (int i = 0; i < Column1.size() - 1; i++) { // for each group
+        for (int j = 0; j < Column1[i].size(); j++) { // for each element in the group
+            for (int k = 0; k < Column1[i + 1].size(); k++) { // for each element in the next group
+                temp_number = Column1[i][j].MinNum & Column1[i + 1][k].MinNum; // to copy any of them except for the diffreneces
+                temp_dashes = Column1[i][j].MinNum ^ Column1[i + 1][k].MinNum; // get 1 if different so temp_dashes are the positions of dashes
+                if (count_1s(temp_dashes) == 1) // different only in one bit
+                {
+                    Column1[i][j].used = true;
+                    Column1[i + 1][k].used = true;
+                    Implicant temp_num(temp_number, temp_dashes);
+                    temp_num.minterms = Column1[i][j].minterms;
+                    temp_num.minterms.insert(temp_num.minterms.end(), Column1[i + 1][k].minterms.begin(), Column1[i + 1][k].minterms.end());
+
+
+                    onesNum = count_1s(temp_number); 
+
+                    if (onesNum + 1 > Column2.size())
+                        Column2.resize(onesNum + 1);
+
+                    Column2[onesNum].push_back(temp_num);
+                }
+            }
+        }
+    }
+}
+void print_Col_II() 
+{
+    cout << endl << "Column_II:" << endl;
+    for (int i = 0; i < Column2.size(); i++) 
+    {
+        cout << "G_" << i;
+        for (int j = 0; j < Column2[i].size(); j++) {
+            cout << "\t\t";
+            print_PI_binary_dashes(Column2[i][j].MinNum, Column2[i][j].dashes);
+            cout << endl;
+        }
+        cout << "\n-------------------------------------" << endl;
+    }
 }
 
-void printState(const vector<int> v) {
-	for (int i = 0; i < v.size(); ++i)	{
-		if (v[i] == -1)
-		{
-			cout << "_" << " ";
-		} else {
-			cout << v[i] << " ";
-		}
-	}
+string print_PI_binary_dashes(int n, int d) // print binary representation with dashes
+{ 
+    int* bits = new int[VarNum];
+    string boolExp;
+    int count = 0;
+    while (n > 0 || count < VarNum) {
+        if (!(d % 2)) // if there is not dash
+            bits[count] = n % 2;
+        else
+            bits[count] = 2;
+        n /=2;
+        d /=2;
+        count++;
+    }
+    for (int i = count - 1; i >= 0; i--) 
+    {
+        if (bits[i] != 2)
+        {
+            cout << bits[i];
+            boolExp += char(48 + bits[i]); // converting int to string
+        }
+            
+        else
+        {
+            cout << "-";
+            boolExp += "-";
+        }
+           
+    }
+    boolExp += "+";
+    return boolExp;
 }
 
-void printMintermWithDontCare(const vector<int> v, const set<int> dontCareSet) {
-	for (int i = 0; i < v.size(); ++i)	{
-		if (dontCareSet.count(v[i])) cout << v[i] << "* ";
-		else cout << v[i] << "  ";
-	}
+void create_Col_III() 
+{
+    int onesNum;
+    int temp_number, temp_dashes;
+    for (int i = 0; i < Column2.size() - 1; i++) {
+        for (int j = 0; j < Column2[i].size(); j++) {
+            for (int k = 0; k < Column2[i + 1].size(); k++) 
+            {
+                if (Column2[i][j].dashes == Column2[i + 1][k].dashes) { // dashes must be in the same position for implicants to be pairable
+                    temp_number = Column2[i][j].MinNum & Column2[i + 1][k].MinNum;
+                    temp_dashes = Column2[i][j].MinNum ^ Column2[i + 1][k].MinNum;
+                    if (count_1s(temp_dashes) == 1) 
+                    {
+                        temp_dashes ^= Column2[i][j].dashes; // temp_dashes =  temp_dashes ^ Column2[i][j].dashes;
+                                                             // to get combination of dashes 
+                                                             // to get position of new dash
+                        //11011 ^ 01011 -> 10000
+                        Column2[i][j].used = true;
+                        Column2[i + 1][k].used = true;
+                        // to pair minterms:
+                        Implicant temp_num(temp_number, temp_dashes);
+                        temp_num.minterms = Column2[i][j].minterms;
+                        temp_num.minterms.insert(temp_num.minterms.end(), Column2[i + 1][k].minterms.begin(), Column2[i + 1][k].minterms.end());
+
+
+                        onesNum = count_1s(temp_number);
+
+                       if (onesNum + 1 > Column3.size())
+                            Column3.resize(onesNum + 1);
+                            
+                        Column3[onesNum].push_back(temp_num);
+                    }
+                }
+            }
+        }
+    }
 }
 
-// For printing the Group
-void printGroups(const map<int, vector<GroupElement>> allGroups, const set<int>dontCareSet) {
-	for (auto& group : allGroups) {
-		cout << "Group " << group.first << endl;
-		for (auto& groupElement : group.second) {
-			printMintermWithDontCare(groupElement.minterms, dontCareSet);
-			cout << ": ";
-			printState(groupElement.value);
-			cout << endl;
-		}
-	}
+//   minterm,  PIcount , covers
+// map<int, pair<int, vector<Implicant>>> Occurrences;
+void createOccurrencesMap(vector<int> minterms)
+{
+    for (int i = 0; i < minterms.size(); i++) {
+        Occurrences[minterms[i]] = { 0,{} };
+    }
+}
+void printOccurrencesMap() 
+{
+    cout << "Occurences of each minterm:\n";
+    for (auto it = Occurrences.begin(); it != Occurrences.end(); it++)
+    {                                                     // number of occurences
+        cout << "minterm: " << it->first << " covered by: " << it->second.first << " PIs\n";
+    }
+    
+}
+void printEssentialPrimeImplicants() 
+{
+    string BoolExp = ""; //ABCD
+
+
+   // <minterm , occurs ,<PIs>> Occurences
+   // <int, (int, <Implicant>)> Occurences
+   
+   //  <minterm, isCovered>
+   // map<int, bool> MintermsCovered;
+    printed_implicants.clear();
+    cout << "Essential Prime Implicants are: ";
+    for (auto it = Occurrences.begin(); it != Occurrences.end(); it++)
+    {                                                     
+        if (it->second.first == 1) // if occurences  == 1
+        {
+            //                            EPI     ->      its minterms      
+            for (int i = 0; i < it->second.second.front().minterms.size(); i++)
+            {
+                MintermsCovered[it->second.second.front().minterms[i]] = true;
+            }
+            if(!is_printed(it->second.second.front()))
+            BoolExp += print_PI_binary_dashes(it->second.second.front().MinNum, it->second.second.front().dashes);
+            printed_implicants.push_back(it->second.second.front());
+            cout << " ";
+        }
+    }
+    cout << "\n";
+   printBooleanexpression(BoolExp);
 }
 
-void printNotUpdated(vector<GroupElement> notUpdated) {
-	cout << endl;
-	for (auto& groupElement : notUpdated) {
-		printMinterm(groupElement.minterms);
-		cout << ": ";
-		printState(groupElement.value);
-		cout << endl;
-	}
-	cout << endl;
+void printMinsThatAreNotCoveredByEPIs() 
+{
+    bool flag = true;
+    cout << "\nMinterms that are not covered by the Essential Prime implicants: \n";
+    for (auto it = MintermsCovered.begin(); it != MintermsCovered.end(); it++) 
+    {
+        if (!it->second)
+        {
+            // we have the uncovered minterms
+            flag = false;
+            cout << it->first;
+            cout << "  ";
+        }
+    }
+    if (flag)
+    {
+        cout << "All minterms are covered by the Essential Prime Implicants.\n";
+        cout << "This is Minimal QuineMcCluskey Expression.\n";
+    }
+}
+
+
+void print_Col_III() {
+    cout << endl << "Column_III:\n-------------------------------------" << endl;
+    int i, j;
+    for (i = 0; i < Column3.size(); i++) // for each group
+    {
+        for (j = 0; j < Column3[i].size(); j++) // for each element in the group
+        {
+            if (!is_printed(Column3[i][j])) 
+            {
+                for (int k = 0; k < Column3[i][j].minterms.size(); k++) // to check if the covered minterms are whether minterms or don't cares
+                                                                        // to create the occurneces map and then get the EPIs
+                {
+                    int m = Column3[i][j].minterms[k]; // the minterm
+                    if (dCareOnly.end() == find(dCareOnly.begin(), dCareOnly.end(), m)) // if this minterm doesn't exits in dCares, then it is a minterm
+                    {
+                        Occurrences[m].first++; // occurences[minterm].NumberOfPIs++
+                        Occurrences[m].second.push_back(Column3[i][j]); // occurences[minterm].PIs.push(PI)
+                    }
+
+                }
+                print_PI_binary_dashes(Column3[i][j].MinNum, Column3[i][j].dashes);
+                cout << endl;
+                printed_implicants.push_back(Column3[i][j]);
+            }
+        }
+    }
+    for (i = 0; i < Column2.size(); i++) {
+        for (j = 0; j < Column2[i].size(); j++) {
+            if (!Column2[i][j].used) {
+
+                for (int k = 0; k < Column2[i][j].minterms.size(); k++)
+                {
+                    int m = Column2[i][j].minterms[k]; // the minterm
+                    if (dCareOnly.end() == find(dCareOnly.begin(), dCareOnly.end(), m))
+                    {
+                        Occurrences[m].first++;
+                        Occurrences[m].second.push_back(Column2[i][j]);
+                    }
+                }
+                print_PI_binary_dashes(Column2[i][j].MinNum, Column2[i][j].dashes);
+                cout << endl;
+            }
+        }
+    }
+    for (i = 0; i < Column1.size(); i++) {
+        for (j = 0; j < Column1[i].size(); j++) {
+            if (!Column1[i][j].used) {
+                for (int k = 0; k < Column1[i][j].minterms.size(); k++)
+                {
+                    int m = Column1[i][j].minterms[k]; // the minterm
+                    if (dCareOnly.end() == find(dCareOnly.begin(), dCareOnly.end(), m))
+                    {
+                        Occurrences[m].first++;
+                        Occurrences[m].second.push_back(Column1[i][j]);
+                    }
+                }
+                print_PI_binary_dashes(Column1[i][j].MinNum, Column1[i][j].dashes);
+                cout << endl;
+            }
+        }
+    }
+    cout << "-------------------------------------" << endl;
+
+}
+/*used to avoid printing duplicates that can exist in the final table*/
+bool is_printed(Implicant n) {
+    for (int i = 0; i < printed_implicants.size(); i++)
+        if (n.MinNum == printed_implicants[i].MinNum && n.dashes == printed_implicants[i].dashes)
+            return true;
+    return false;
+}
+/*initialize all table*/
+
+vector<int> inputProcessing(string line, bool isMinterm)
+{
+
+    vector<int> fixedInput;
+    int sizeMin = line.size();
+    vector<int>commosPos; string temp;
+    try
+    {
+        if (line == "") // handels if no minterms OR no don't cares
+        {
+            fixedInput.resize(0);
+            return fixedInput;
+        }
+
+        for (int i = 0; i < sizeMin; i++) // get positions of all commas
+        {
+            if (line[i] == ',')
+                commosPos.push_back(i);
+        }
+
+        if (commosPos.size() == 0) // if no commas
+        {
+            int t = stoi(line);
+            if (isMinterm) MintermsCovered[t] = false; // init new minterm (t) in MintermsNcovered map and make it not covered (false).
+            fixedInput.push_back(t);
+            temp = "";
+        }
+        else 
+        {
+            for (int i = 0; i < commosPos.size(); i++)
+            {
+                if (i == 0)
+                {
+                    for (int j = 0; j < commosPos[i]; j++) // tske first minterm/dCare till first comma
+                    {
+                        temp = temp + line[j];
+                    }
+                    int t = stoi(temp);
+                    if (isMinterm) MintermsCovered[t] = false;
+                    fixedInput.push_back(t);
+                    temp = "";
+                }
+
+                else
+                {
+
+                    for (int j = commosPos[i - 1] + 1; j < commosPos[i]; j++) // start from the next pos of the prev comma until the next comma
+                    {
+                        temp = temp + line[j];
+                    }
+
+                    int t = stoi(temp);
+                    if (isMinterm) MintermsCovered[t] = false;
+                    fixedInput.push_back(t);
+                    temp = "";
+                }
+            }
+
+            for (int j = commosPos[commosPos.size() - 1] + 1; j < line.size(); j++) // start from posistion after the last comma
+            {
+                temp = temp + line[j];
+            }
+
+            int t = stoi(temp);
+            if (isMinterm) MintermsCovered[t] = false;
+            fixedInput.push_back(t);
+            temp = "";
+        }
+    }
+    catch(int num)
+    {
+        cout << " Error procssing the input";
+        exit(3);
+    }
+   
+    return fixedInput;
+
+}
+void checkInput(int variables, vector<int> terms)
+{
+    // Check if the minterm should not exist  
+    if (terms.size() == 0)
+        return;
+
+    for (int i = 0; i < terms.size(); i++)
+    {
+        if (terms[i] > pow(2, variables))
+        {
+            cout << " Error , " << terms[i] << " is out of range ! ";
+            exit(1);
+        }
+
+    }
+    //Check if there is a repeated term 
+    for (int i = 0; i < terms.size()-1; i++)
+    {
+            if (terms[i] == terms[i+1])
+            {
+                cout << "The minterm " << terms[i] << " is repeated !" << endl;
+                exit(1);
+            }
+    }
+}
+
+void CheckRepeated(vector<int> min, vector<int> dontCare)
+{
+    for (int i = 0; i < min.size(); i++)
+    {
+        for (int j = 0; j < dontCare.size(); j++)
+        {
+            if (min[i] == dontCare[j])
+            {
+                cout << " The Term : " << min[i] << " exists as minterm and as Don't Care ";
+                exit(1);
+            }
+        }
+    }
+}
+
+void getInputFromFile() {
+    ifstream Text1;
+    Text1.open("TestCases.txt");
+    string minterms; string dontCare;
+
+        Text1 >> VarNum;
+        Text1 >> minterms;
+        Text1 >> dontCare;
+    
+     
+    mintermsOnly = inputProcessing(minterms,1);
+    dCareOnly = inputProcessing(dontCare,0);
+    input_values = mintermsOnly;
+    input_values.insert(input_values.end(), dCareOnly.begin(), dCareOnly.end());
+    sort(input_values.begin(), input_values.end());
+   checkInput(VarNum, mintermsOnly);
+   checkInput(VarNum, dCareOnly);
+   CheckRepeated(mintermsOnly, dCareOnly);
+}
+
+/*return min number of bits a number is represented by. used for best output*/
+int count_bits(int n) {
+    short bit = 0;
+    int count = 0;
+    while (n > 0) {
+        bit = n % 2;
+        n >>= 1;
+        count++;
+    }
+    return count;
+}
+
+void printBooleanexpression(string binary) 
+{
+    string ans = "";
+    cout << "Boolean Expression for the EPIs: ";
+    int letter = 65; // A
+    for (int i =0; i < binary.length()-1; i++)
+    {
+        if (binary[i] == '+') { letter = 64; ans += " + "; }
+        if (binary[i] == '0') ans = ans + '~' + char(letter);
+        if (binary[i] == '1') ans += char(letter);
+        letter++;  
+    }
+    cout << ans;
+    cout << "\n";
 }
