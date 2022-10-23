@@ -423,6 +423,7 @@ vector<int> inputProcessing(string min, bool isMinterm)
                 temp = temp + min[j];
             }
             int t = stoi(temp);
+            if(isMinterm) MintermsNcovered[t] = false;
             fixedInput.push_back(t);
             temp = "";
         }
@@ -522,7 +523,7 @@ void getinput() {
     cout << "\nInput value followed by ENTER[^D ends input]\n> ";
     while (cin >> in) {
         input_values.push_back(in);
-        MintermsNcovered[in] = false;
+        
         num_bits = count_bits(in);
         if (num_bits > MIN_BITS)
             MIN_BITS = num_bits;
